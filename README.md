@@ -1,1 +1,3 @@
-This is the mini-RFC Document for MCO1: Implementation of Reliable Data Transfer of UDP.
+# NSCOM01 MCO1 Mini-RFC Document
+
+https://docs.google.com/document/d/1KwT1ivB8xE-2wj5VZGz7BKjXU38hDdW4qmDduP5cLnk/edit?usp=sharing
