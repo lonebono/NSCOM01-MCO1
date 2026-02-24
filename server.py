@@ -7,25 +7,24 @@ def start_server(host, port):
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.bind((host, port))
     print(f"Server listening on {host}:{port}...")
+    sock.listen(5)
 
     while True:
-        data, addr = sock.recvfrom(4096)
-        msg_type, seq, payload = RDTProtocol.parse_packet(data)
+        #data, addr = sock.recvfrom(4096)
+        #msg_type, seq, payload = RDTProtocol.parse_packet(data)
         
-        print(f"Received Packet: Type={msg_type}, Seq={seq}, Payload={payload.decode(errors='ignore')}")
+        #print(f"Received Packet: Type={msg_type}, Seq={seq}, Payload={payload.decode(errors='ignore')}")
         
         # Skeleton for ACK logic [cite: 171]
-        ack_packet = RDTProtocol.create_packet(RDTProtocol.ACK, seq)
-        sock.sendto(ack_packet, addr)
+        #ack_packet = RDTProtocol.create_packet(RDTProtocol.ACK, seq)
+        #sock.sendto(ack_packet, addr)
 
-def send_ACK():
-    pass
-
-def recv_ACK():
-    pass
+        client, client_addr = sock.accept()
+        message = client.recv(1024)
+        establish_connection(sock,client,message)
 
 # implementation of 3 way handshake from tcp
-def establish_connection(sock, client_ip, message):
+def establish_connection(sock, client, message):
     # parse message from client "SYN ISN"
     parts = message.split()
     client_isn = parts[1]
@@ -36,11 +35,11 @@ def establish_connection(sock, client_ip, message):
     send_ack = client_isn + 1
 
     synack_response = "SYN-ACK "+ server_isn + " " + send_ack
-    sock.sendto(synack_response, client_ip)
+    sock.send(synack_response)
 
     expected_ack = client_isn + 1
     
-    sock.settimeout(20)
+    sock.settimeout(20) # seconds
     try:
         while True:
             # byte buffer
@@ -49,10 +48,6 @@ def establish_connection(sock, client_ip, message):
             recv_parts = data.split()
             recv_seq = int(recv_parts[1])
             recv_ack = int(recv_parts[2])
-
-            if addr != client_ip:
-                # send_error(client_ip, 2, error_desc) # type 2 unexpected packets error
-                return -1, -1
             
             if recv_parts[0] != "ACK":
                 # send_error(client_ip, 2, error_desc) # type 2 unexpected packets error
@@ -63,7 +58,7 @@ def establish_connection(sock, client_ip, message):
                 return -1, -1
 
             if parts[0] == "ACK" and recv_ack == expected_ack:
-                print(f"Handshake complete with {client_ip}")
+                print(f"Handshake complete with {client.getsockname()}")
                 return server_isn, client_isn
             
     except socket.error:
@@ -72,3 +67,5 @@ def establish_connection(sock, client_ip, message):
 
     finally:
         sock.settimeout(None)
+
+def send_error(client_ip):
