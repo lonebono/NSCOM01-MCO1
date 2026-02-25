@@ -3,33 +3,60 @@ import argparse
 import random
 from protocol import *
 
-def start_server(host, port):
+# DEBUGGING
+# we need to handle if server timeouts, client has to close connection on their end
+
+# =======================================
+#  Config
+# =======================================
+SERVER_HOST = "127.0.0.1"
+SERVER_PORT = 8080
+SERVER_DIR  = "server/"   # folder of client files to upload/download
+
+def start_server():
     # Using UDP (SOCK_DGRAM) as required [cite: 157]
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    sock.bind((host, port))
-    print(f"Server listening on {host}:{port}...")
+    sock.bind((SERVER_HOST, SERVER_PORT))
+    print(f"Server listening on {SERVER_HOST}:{SERVER_PORT}...")
+    conn = 0
 
     # listen for SYN
     while True:
         raw_bytes, client_addr = sock.recvfrom(CHUNK_SIZE)
-        msg = parse_packet(raw_bytes)
-        if msg["type"] == SYN:
+        init = parse_packet(raw_bytes)
+        if init["type"] == SYN and conn == 0:
             conn = establish_connection(sock, client_addr, raw_bytes)
 
             if conn == 0:
                 print(f"Could not establish connection with {client_addr}.")
             if conn == 1:
                 try:
-                    sock.settimeout(TIMEOUT)
                     req_bytes, client_addr = sock.recvfrom(CHUNK_SIZE)
                     req = parse_packet(req_bytes)
+                    sock.settimeout(60) # USES SEPERATE TIMEOUT TIME FOR USER CHOOSING
 
                     if req["type"] == GET:
-                        pass
+                        # get filesize of name
+                        filesize = 0
+                        sock.sendto(build_request_ack(filesize),client_addr)
+
+                        req_bytes2, _ = sock.recvfrom(CHUNK_SIZE)
+                        req2 = parse_packet(req_bytes2)
+
+                        if req2["ack"] != init["seq"] + 1:
+                            build_error(2)
+
+                        if req2["ack"] == init["seq"] + 1:
+                            # send file packet by packet until EOF
+                            pass
+
                     if req["type"] == PUT:
                         pass
+
                     if req["type"] == FIN:
-                        pass
+                        print(f"Initiating teardown.")
+                        sock.sendto(build_fin_ack(req["seq"]), client_addr)
+                        print(f"Connection ended.")
 
                 except socket.timeout:
                     print(f"Client {client_addr} went silent after handshake.")
@@ -60,10 +87,15 @@ def establish_connection(sock, client_addr, raw_bytes):
                     print(f"Handshake failed with {addr}")
                     return 0
 
-        except socket.error:
+        except socket.timeout:
             print("Client no response, trying again.")
             continue
         finally:
-            print("Handshake reached max retries.")
             sock.settimeout(None)
+    print("Handshake reached max retries.")
     return 0
+
+
+
+if __name__ == "__main__":
+   start_server()
