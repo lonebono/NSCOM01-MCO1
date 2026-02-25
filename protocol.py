@@ -131,9 +131,10 @@ def parse_packet(raw_bytes):
 
     # SYN-ACK
     elif msg_type == SYN_ACK:
-        # "SYN-ACK SEQ=x"
+        # "SYN-ACK SEQ=y ACK=x+1"
         seq = int(parts[1].split("=")[1])
-        return {"type": SYN_ACK, "seq": seq}
+        ack = int(parts[2].split("=")[1])
+        return {"type": SYN_ACK, "seq": seq, "ack": ack}
 
     # ACK
     elif msg_type == ACK:
