@@ -1,40 +1,61 @@
 import socket
-import argparse
-from protocol import RDTProtocol
+from client import handshake, download, upload, teardown
+from client import SERVER_HOST, SERVER_PORT
 
-def start_server(host, port):
-    # Using UDP (SOCK_DGRAM) as required [cite: 157]
+def main():
+    print("=" * 20)
+    print("   Reliable UDP File Transfer Client")
+    print("=" * 20)
+
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    sock.bind((host, port))
-    print(f"Server listening on {host}:{port}...")
+    print(f"Connecting to server at {SERVER_HOST}:{SERVER_PORT}...")
 
+    # Step 1: THREE WAY HANDSHAKE
+    seq = handshake(sock)
+    if seq is None:
+        print("Could not establish session. Exiting.")
+        sock.close()
+        return
+
+    print("\nSession established! You can now transfer files.")
+    print("Commands: GET <filename> | PUT <filename> | EXIT")
+    print("-" * 40)
+
+    # Step 2: LOOP
     while True:
-        data, addr = sock.recvfrom(4096)
-        msg_type, seq, payload = RDTProtocol.parse_packet(data)
-        
-        print(f"Received Packet: Type={msg_type}, Seq={seq}, Payload={payload.decode(errors='ignore')}")
-        
-        # Skeleton for ACK logic [cite: 171]
-        ack_packet = RDTProtocol.create_packet(RDTProtocol.ACK, seq)
-        sock.sendto(ack_packet, addr)
+        try:
+            command = input("\n> ").strip()
+        except KeyboardInterrupt:
+            print("\nInterrupted.")
+            break
 
-def start_client(host, port):
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    print(f"Client connecting to {host}:{port}...")
+        if not command:
+            continue
 
-    # Skeleton for Session Establishment (SYN) [cite: 165, 166]
-    syn_packet = RDTProtocol.create_packet(RDTProtocol.SYN, 0, b"Hello Server")
-    sock.sendto(syn_packet, (host, port))
+        parts = command.split()
+        op = parts[0].upper()
+
+        if op == "GET" and len(parts) == 2:
+            result = download(sock, parts[1], seq)
+            if result is not None:
+                seq = result  # update seq for next operation
+
+        elif op == "PUT" and len(parts) == 2:
+            result = upload(sock, parts[1], seq)
+            if result is not None:
+                seq = result  # update seq for next operation
+
+        elif op == "EXIT":
+            break
+
+        else:
+            print("Invalid command. Use: GET <filename>, PUT <filename>, or EXIT")
+
+    # Step 3: CLOSE
+    print("\nClosing session...")
+    teardown(sock)
+    sock.close()
+    print("Goodbye!")
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Reliable UDP File Transfer [cite: 131]")
-    parser.add_argument("role", choices=["client", "server"], help="Run as client or server")
-    parser.add_argument("--host", default="127.0.0.1", help="Target host IP")
-    parser.add_argument("--port", type=int, default=8080, help="Target port")
-
-    args = parser.parse_args()
-
-    if args.role == "server":
-        start_server(args.host, args.port)
-    else:
-        start_client(args.host, args.port)
+    main()
