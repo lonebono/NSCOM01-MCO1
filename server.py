@@ -22,7 +22,7 @@ def start_server():
 
     # listen for SYN
     while True:
-        raw_bytes, client_addr = sock.recvfrom(CHUNK_SIZE)
+        raw_bytes, client_addr = sock.recvfrom(4096 + CHUNK_SIZE)
         init = parse_packet(raw_bytes)
         if init["type"] == SYN and conn == 0:
             conn = establish_connection(sock, client_addr, raw_bytes)
@@ -31,26 +31,26 @@ def start_server():
                 print(f"Could not establish connection with {client_addr}.")
             if conn == 1:
                 try:
-                    req_bytes, client_addr = sock.recvfrom(CHUNK_SIZE)
+                    req_bytes, client_addr = sock.recvfrom(4096 + CHUNK_SIZE)
                     req = parse_packet(req_bytes)
                     sock.settimeout(60) # USES SEPERATE TIMEOUT TIME FOR USER CHOOSING
 
-                    if req["type"] == GET:
+                    if req["type"] == REQUEST and req["operation"] == GET:
                         # get filesize of name
                         filesize = 0
                         sock.sendto(build_request_ack(filesize),client_addr)
 
-                        req_bytes2, _ = sock.recvfrom(CHUNK_SIZE)
+                        req_bytes2, _ = sock.recvfrom(4096 + CHUNK_SIZE)
                         req2 = parse_packet(req_bytes2)
 
                         if req2["ack"] != init["seq"] + 1:
-                            build_error(2)
+                            sock.sendto(build_error(ERR_UNEXPECTED), client_addr)
 
                         if req2["ack"] == init["seq"] + 1:
                             # send file packet by packet until EOF
                             pass
 
-                    if req["type"] == PUT:
+                    if req["type"] == REQUEST and req["operation"] == PUT:
                         pass
 
                     if req["type"] == FIN:
@@ -77,7 +77,7 @@ def establish_connection(sock, client_addr, raw_bytes):
         print(f"[SYN-ACK] Sent SEQ={server_isn} (attempt {attempt})")
         try:
             sock.settimeout(TIMEOUT)
-            recv_bytes, addr = sock.recvfrom(CHUNK_SIZE)
+            recv_bytes, addr = sock.recvfrom(4096 + CHUNK_SIZE)
             packet = parse_packet(recv_bytes)
             if packet["type"] == ACK:
                 if expected_ack == packet["ack"]:

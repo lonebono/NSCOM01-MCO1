@@ -234,10 +234,10 @@ def upload(sock, filename, seq):
 #  Teardown
 # =======================================
 
-def teardown(sock):
+def teardown(sock, seq):
     """Send FIN and wait for FIN-ACK to close session."""
     for attempt in range(1, MAX_RETRIES + 1):
-        sock.sendto(build_fin(), (SERVER_HOST, SERVER_PORT))
+        sock.sendto(build_fin(seq), (SERVER_HOST, SERVER_PORT))
         print(f"[FIN] Sent (attempt {attempt})")
 
         try:

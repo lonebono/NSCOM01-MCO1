@@ -53,7 +53,7 @@ def main():
 
     # Step 3: CLOSE
     print("\nClosing session...")
-    teardown(sock)
+    teardown(sock, seq)
     sock.close()
     print("Goodbye!")
 

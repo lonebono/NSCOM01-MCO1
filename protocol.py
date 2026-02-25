@@ -64,12 +64,12 @@ def build_ack(seq):
 
 def build_fin(seq):
     """Whoever finishes: initiate session termination."""
-    return f"FIN SEQ={seq+1}\n"
+    return f"FIN SEQ={seq+1}\n".encode()
 
 
 def build_fin_ack(seq):
     """Response to FIN."""
-    return f"FIN-ACK ACK={seq+1}\n"
+    return f"FIN-ACK ACK={seq+1}\n".encode()
 
 
 def build_request_get(filename):
