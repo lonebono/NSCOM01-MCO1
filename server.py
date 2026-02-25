@@ -34,6 +34,7 @@ def start_server():
             if conn == 1:
                 while True:
                     try:
+                        # ACCEPT GET REQUEST FROM CLIENT
                         req_bytes, client_addr = sock.recvfrom(HEADER_SIZE + CHUNK_SIZE)
                         req = parse_packet(req_bytes)
                         sock.settimeout(60) # USES SEPERATE TIMEOUT TIME FOR USER CHOOSING
@@ -57,7 +58,8 @@ def start_server():
                             # Send ACK (filesize, OK)
                             sock.sendto(build_request_ack(filesize), client_addr)
                             print(f"[ACK] Sent filesize={filesize}")
-
+                            
+                            # RECEIVE READY ACK FROM CLIENT
                             ready_ack_raw, _ = sock.recvfrom(HEADER_SIZE + CHUNK_SIZE)
                             ready_ack = parse_packet(ready_ack_raw)
                             if ready_ack["type"] != ACK:
@@ -66,7 +68,8 @@ def start_server():
                             print(f"[ACK] Client ready, starting transfer...")
 
                             # send file by chunk
-                            seq = ready_ack["ack"] - 1 # current seq of client so need to minus 1
+                            seq = ready_ack["ack"] # current seq of client so need to minus 1
+                                                   # # dont need to add since the ACK for file size has no SEQ
                             done = False 
                             with open(filepath, "rb") as f:
                                 while not done:
@@ -80,6 +83,7 @@ def start_server():
                                         f.seek(-len(next_chunk), 1)
 
                                     for attempt in range(1, MAX_RETRIES + 1):
+                                        # SEND DATA SEQ EOF
                                         sock.sendto(build_data(seq, chunk, eof=eof), client_addr)
                                         print(f"[DATA] Sent seq={seq} EOF={eof} size={len(chunk)} bytes (attempt {attempt})")
 
