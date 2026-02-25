@@ -35,6 +35,7 @@ EOF_LAST    = 1   # Last packet
 #  Config
 # =========================================
 CHUNK_SIZE  = 512       # Max payload size in bytes
+HEADER_SIZE = 64        # Max header size in bytes 
 TIMEOUT     = 5         # Seconds before retransmit
 MAX_RETRIES = 10        # Max retransmit attempts
 

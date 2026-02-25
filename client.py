@@ -27,16 +27,16 @@ def handshake(sock):
 
         try:
             sock.settimeout(TIMEOUT)
-            raw, _ = sock.recvfrom(4096)
-            pkt = parse_packet(raw)
+            syn_ack_raw, _ = sock.recvfrom(HEADER_SIZE + CHUNK_SIZE)
+            syn_ack_pkt = parse_packet(syn_ack_raw)
 
-            if pkt["type"] == ERROR:
-                print(f"[ERROR] Server responded: error_type={pkt['error_type']}, retrying...")
+            if syn_ack_pkt["type"] == ERROR:
+                print(f"[ERROR] Server responded: error_type={syn_ack_pkt['error_type']}, retrying...")
                 continue
 
-            if pkt["type"] == SYN_ACK:
-                print(f"[SYN-ACK] Received SEQ={pkt['seq']}, sending ACK...")
-                sock.sendto(build_ack(pkt["seq"]), (SERVER_HOST, SERVER_PORT))
+            if syn_ack_pkt["type"] == SYN_ACK:
+                print(f"[SYN-ACK] Received SEQ={syn_ack_pkt['seq']}, sending ACK...")
+                sock.sendto(build_ack(syn_ack_pkt["seq"]), (SERVER_HOST, SERVER_PORT))
                 print(f"[ACK] Sent, session established!")
                 return isn
 
@@ -65,18 +65,18 @@ def download(sock, filename, seq):
     for attempt in range(1, MAX_RETRIES + 1):
         try:
             sock.settimeout(TIMEOUT)
-            raw, _ = sock.recvfrom(4096)
-            pkt = parse_packet(raw)
+            filesize_raw, _ = sock.recvfrom(HEADER_SIZE + CHUNK_SIZE)
+            filesize_pkt = parse_packet(filesize_raw)
 
-            if pkt["type"] == ERROR:
-                if pkt["error_type"] == ERR_NOT_FOUND:
+            if filesize_pkt["type"] == ERROR:
+                if filesize_pkt["error_type"] == ERR_NOT_FOUND:
                     print(f"[ERROR] File not found on server.")
                 else:
-                    print(f"[ERROR] Server error type={pkt['error_type']}")
+                    print(f"[ERROR] Server error type={filesize_pkt['error_type']}")
                 return None
 
-            if pkt["type"] == ACK and pkt["subtype"] == "filesize":
-                filesize = pkt["filesize"]
+            if filesize_pkt["type"] == ACK and filesize_pkt["subtype"] == "filesize":
+                filesize = filesize_pkt["filesize"]
                 print(f"[ACK] Server confirmed file size={filesize} bytes")
                 break
 
@@ -92,26 +92,25 @@ def download(sock, filename, seq):
     print(f"[ACK] Sent ready, starting download...")
 
     # Receive DATA packets
-    os.makedirs(CLIENT_DIR, exist_ok=True)
     save_path = os.path.join(CLIENT_DIR, filename)
     received_chunks = {}
-    expected_seq = seq
+    expected_seq = seq + 1 # always expect a tick
 
     while True:
         for attempt in range(1, MAX_RETRIES + 1):
             try:
                 sock.settimeout(TIMEOUT)
-                raw, _ = sock.recvfrom(4096 + CHUNK_SIZE)
-                pkt = parse_packet(raw)
+                data_raw, _ = sock.recvfrom(HEADER_SIZE + CHUNK_SIZE)
+                data_pkt = parse_packet(data_raw)
 
-                if pkt["type"] == ERROR:
-                    print(f"[ERROR] Received error_type={pkt['error_type']} during transfer")
+                if data_pkt["type"] == ERROR:
+                    print(f"[ERROR] Received error_type={data_pkt['error_type']} during transfer")
                     return None
 
-                if pkt["type"] == DATA:
-                    seq = pkt["seq"]
-                    eof = pkt["eof"]
-                    payload = pkt["payload"]
+                if data_pkt["type"] == DATA:
+                    seq = data_pkt["seq"]
+                    eof = data_pkt["eof"]
+                    payload = data_pkt["payload"]
 
                     if seq != expected_seq:
                         print(f"[UNEXPECTED] Expected seq={expected_seq}, got seq={seq}")
@@ -125,7 +124,6 @@ def download(sock, filename, seq):
                     print(f"[ACK] Sent seq={seq}")
 
                     expected_seq += 1
-
                     if eof == EOF_LAST:
                         print(f"[EOF] Last packet received, saving file...")
                         with open(save_path, "wb") as f:
@@ -168,15 +166,15 @@ def upload(sock, filename, seq):
 
         try:
             sock.settimeout(TIMEOUT)
-            raw, _ = sock.recvfrom(4096)
-            pkt = parse_packet(raw)
+            ready_raw, _ = sock.recvfrom(HEADER_SIZE + CHUNK_SIZE)
+            ready_pkt = parse_packet(ready_raw)
 
-            if pkt["type"] == ERROR:
-                print(f"[ERROR] Server denied upload: error_type={pkt['error_type']}")
+            if ready_pkt["type"] == ERROR:
+                print(f"[ERROR] Server denied upload: error_type={ready_pkt['error_type']}")
                 return None
 
-            if pkt["type"] == ACK and pkt["subtype"] == "filesize":
-                print(f"[ACK] Server ready, confirmed size={pkt['filesize']}")
+            if ready_pkt["type"] == ACK and ready_pkt["subtype"] == "filesize":
+                print(f"[ACK] Server ready, confirmed size={ready_pkt['filesize']}")
                 break
 
         except socket.timeout:
@@ -190,8 +188,9 @@ def upload(sock, filename, seq):
     print(f"[ACK] Sent ready, starting upload...")
 
     # Read and send file in chunks
+    done = False 
     with open(filepath, "rb") as f:
-        while True:
+        while not done:
             chunk = f.read(CHUNK_SIZE)
             if not chunk:
                 break
@@ -208,16 +207,18 @@ def upload(sock, filename, seq):
 
                 try:
                     sock.settimeout(TIMEOUT)
-                    raw, _ = sock.recvfrom(4096)
-                    pkt = parse_packet(raw)
+                    ack_raw, _ = sock.recvfrom(HEADER_SIZE + CHUNK_SIZE)
+                    ack_pkt = parse_packet(ack_raw)
 
-                    if pkt["type"] == ACK and pkt["seq"] == seq + 1:
+                    if ack_pkt["type"] == ACK and ack_pkt["ack"] == seq + 1:
                         print(f"[ACK] Received seq={seq}")
                         seq += 1
+                        if eof == EOF_LAST:
+                            done = True
                         break
 
-                    if pkt["type"] == ERROR:
-                        print(f"[ERROR] Received error_type={pkt['error_type']} during upload")
+                    if ack_pkt["type"] == ERROR:
+                        print(f"[ERROR] Received error_type={ack_pkt['error_type']} during upload")
                         return None
 
                 except socket.timeout:
@@ -241,13 +242,16 @@ def teardown(sock, seq):
         print(f"[FIN] Sent (attempt {attempt})")
 
         try:
-            sock.settimeout(TIMEOUT)
-            raw, _ = sock.recvfrom(4096)
-            pkt = parse_packet(raw)
+            fin_ack_raw, _ = sock.recvfrom(HEADER_SIZE + CHUNK_SIZE)
+            fin_ack_pkt = parse_packet(fin_ack_raw)
 
-            if pkt["type"] == FIN_ACK:
+            if fin_ack_pkt["type"] == FIN_ACK:
                 print(f"[FIN-ACK] Received, session closed.")
                 return True
+            
+        except ConnectionResetError:
+            print(f"[FIN-ACK] Connection closed by server.")
+            return True
 
         except socket.timeout:
             print(f"[TIMEOUT] Waiting for FIN-ACK (attempt {attempt})")
