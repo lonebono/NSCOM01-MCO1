@@ -211,7 +211,7 @@ def upload(sock, filename, seq):
                     raw, _ = sock.recvfrom(4096)
                     pkt = parse_packet(raw)
 
-                    if pkt["type"] == ACK and pkt["seq"] == seq:
+                    if pkt["type"] == ACK and pkt["seq"] == seq + 1:
                         print(f"[ACK] Received seq={seq}")
                         seq += 1
                         break
