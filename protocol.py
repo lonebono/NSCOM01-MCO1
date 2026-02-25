@@ -138,13 +138,13 @@ def parse_packet(raw_bytes):
 
     # ACK
     elif msg_type == ACK:
-        # "ACK SEQ=x" or "ACK filesize=x OK"
+        # "ACK ACK=x" or "ACK filesize=x OK"
         if "filesize" in parts[1]:
             filesize = int(parts[1].split("=")[1])
             return {"type": ACK, "subtype": "filesize", "filesize": filesize}
         else:
-            seq = int(parts[1].split("=")[1])
-            return {"type": ACK, "subtype": "seq", "seq": seq}
+            ack = int(parts[1].split("=")[1])
+            return {"type": ACK, "subtype": "ack", "ack": ack}
 
     # FIN
     elif msg_type == FIN:
