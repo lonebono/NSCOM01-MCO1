@@ -1,71 +1,48 @@
 import socket
 import argparse
 import random
+from protocol import *
 
 def start_server(host, port):
     # Using UDP (SOCK_DGRAM) as required [cite: 157]
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.bind((host, port))
     print(f"Server listening on {host}:{port}...")
-    sock.listen(5)
 
     while True:
-        #data, addr = sock.recvfrom(4096)
-        #msg_type, seq, payload = RDTProtocol.parse_packet(data)
-        
-        #print(f"Received Packet: Type={msg_type}, Seq={seq}, Payload={payload.decode(errors='ignore')}")
-        
-        # Skeleton for ACK logic [cite: 171]
-        #ack_packet = RDTProtocol.create_packet(RDTProtocol.ACK, seq)
-        #sock.sendto(ack_packet, addr)
+        raw_bytes, client_addr = sock.recvfrom(CHUNK_SIZE)
+        conn = establish_connection(sock, client_addr, raw_bytes)
+        if conn == -1:
+            print(f"Could not establish connection with {client_addr}.")
+            return
+        if conn == 1:
+            while True:
+                # do commands
+                pass
 
-        client, client_addr = sock.accept()
-        message = client.recv(1024)
-        establish_connection(sock,client,message)
 
 # implementation of 3 way handshake from tcp
-def establish_connection(sock, client, message):
-    # parse message from client "SYN ISN"
-    parts = message.split()
-    client_isn = parts[1]
-
-    # random 32 bit integer for server ISN
-    server_isn = random.randint(0, 2**32 - 1)
-
-    send_ack = client_isn + 1
-
-    synack_response = "SYN-ACK "+ server_isn + " " + send_ack
-    sock.send(synack_response)
-
-    expected_ack = client_isn + 1
-    
-    sock.settimeout(20) # seconds
+# returns 1 if successful, returns -1 if not
+def establish_connection(sock, client_addr, raw_bytes):
+    msg = parse_packet(raw_bytes)
+    server_isn = generate_isn()
+    expected_ack = server_isn + 1
     try:
+        syn_ack = build_syn_ack(server_isn, msg["seq"])
+        sock.sendto(syn_ack, client_addr)
+        sock.settimeout(TIMEOUT)
         while True:
-            # byte buffer
-            data, addr = sock.recvfrom(1024)
-            # data syntax: "SYN seq ack"       
-            recv_parts = data.split()
-            recv_seq = int(recv_parts[1])
-            recv_ack = int(recv_parts[2])
-            
-            if recv_parts[0] != "ACK":
-                # send_error(client_ip, 2, error_desc) # type 2 unexpected packets error
-                return -1, -1
-            
-            if recv_ack != expected_ack:
-                # send_error(client_ip, 2, error_desc) # type 2 unexpected packets error
-                return -1, -1
+            recv_bytes, addr = sock.recvfrom(CHUNK_SIZE)
+            packet = parse_packet(recv_bytes)
+            if packet["type"] == "ACK":
+                if expected_ack == packet["ack"]:
+                    print(f"Handshake complete with {addr}")
+                    return 1
+                else:
+                    print(f"Handshake failed with {addr}")
+                    return -1
 
-            if parts[0] == "ACK" and recv_ack == expected_ack:
-                print(f"Handshake complete with {client.getsockname()}")
-                return server_isn, client_isn
-            
     except socket.error:
-        print("Client ACK timed out, handshake failed.")
-        return -1, -1
-
+        print("Handshake timed out.")
     finally:
         sock.settimeout(None)
-
-def send_error(client_ip):
