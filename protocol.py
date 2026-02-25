@@ -52,14 +52,14 @@ def build_syn(isn):
     return f"SYN SEQ={isn}\n".encode()
 
 
-def build_syn_ack(isn):
+def build_syn_ack(isn, seq):
     """Server -> Client: Accept session, confirm ISN."""
-    return f"SYN-ACK SEQ={isn}\n".encode()
+    return f"SYN-ACK SEQ={isn} ACK={seq+1}\n".encode()
 
 
 def build_ack(seq):
     """Generic ACK with sequence number."""
-    return f"ACK SEQ={seq}\n".encode()
+    return f"ACK SEQ={seq+1}\n".encode()
 
 
 def build_fin():
