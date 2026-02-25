@@ -59,17 +59,17 @@ def build_syn_ack(isn, seq):
 
 def build_ack(seq):
     """Generic ACK with sequence number."""
-    return f"ACK SEQ={seq+1}\n".encode()
+    return f"ACK ACK={seq+1}\n".encode()
 
 
-def build_fin():
+def build_fin(seq):
     """Whoever finishes: initiate session termination."""
-    return b"FIN\n"
+    return f"FIN SEQ={seq+1}\n"
 
 
-def build_fin_ack():
+def build_fin_ack(seq):
     """Response to FIN."""
-    return b"FIN-ACK\n"
+    return f"FIN-ACK ACK={seq+1}\n"
 
 
 def build_request_get(filename):
