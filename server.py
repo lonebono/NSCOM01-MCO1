@@ -9,16 +9,32 @@ def start_server(host, port):
     sock.bind((host, port))
     print(f"Server listening on {host}:{port}...")
 
+    # listen for SYN
     while True:
         raw_bytes, client_addr = sock.recvfrom(CHUNK_SIZE)
-        conn = establish_connection(sock, client_addr, raw_bytes)
-        if conn == 0:
-            print(f"Could not establish connection with {client_addr}.")
-            return
-        if conn == 1:
-            while True:
-                # do commands
-                pass
+        msg = parse_packet(raw_bytes)
+        if msg["type"] == SYN:
+            conn = establish_connection(sock, client_addr, raw_bytes)
+
+            if conn == 0:
+                print(f"Could not establish connection with {client_addr}.")
+            if conn == 1:
+                try:
+                    sock.settimeout(TIMEOUT)
+                    req_bytes, client_addr = sock.recvfrom(CHUNK_SIZE)
+                    req = parse_packet(req_bytes)
+
+                    if req["type"] == GET:
+                        pass
+                    if req["type"] == PUT:
+                        pass
+                    if req["type"] == FIN:
+                        pass
+
+                except socket.timeout:
+                    print(f"Client {client_addr} went silent after handshake.")
+                finally:
+                    sock.settimeout(None)
 
 
 # implementation of 3 way handshake from tcp
@@ -36,7 +52,7 @@ def establish_connection(sock, client_addr, raw_bytes):
             sock.settimeout(TIMEOUT)
             recv_bytes, addr = sock.recvfrom(CHUNK_SIZE)
             packet = parse_packet(recv_bytes)
-            if packet["type"] == "ACK":
+            if packet["type"] == ACK:
                 if expected_ack == packet["ack"]:
                     print(f"Handshake complete with {addr}")
                     return 1
